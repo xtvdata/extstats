@@ -1,82 +1,90 @@
-# extstats
-Export Metrics from Asus RT-AX88U Router into influxDB
+# extstats-py
+Export Metrics from Asus RT-AX88U Router into influxDB in Python.
 
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats.jpg)
+This is a proof of concept port of the excellent [extstats scripts for AX88u](https://raw.githubusercontent.com/corgan2222/extstats) to discuss possible improvements.
 
-# ALPHA Version! Dont use in production yet!
 
-## [Install ](https://github.com/corgan2222/extstats/wiki/Setup)
-`/usr/sbin/curl --retry 3 "https://raw.githubusercontent.com/corgan2222/extstats/master/extstats.sh" -o "/jffs/scripts/extstats" && chmod 0755 /jffs/scripts/extstats && /jffs/scripts/extstats install`
+# Dont use in production!!!!
 
 ## Setup
-check the Wiki https://github.com/corgan2222/extstats/wiki/Setup
+Again, this is not a module ready to be installed, but rather a proof of concept for experts.
+
+To try the py version is sufficient to add all files manually to the installation directory of extstats:
+e.g. `/jffs/addons/extstats.d`
+
+To have this running it is sufficient to add cron such as:
+```
+*/5 * * * * /opt/bin/python3 /jffs/addons/extstats.d/main.py
+```
+It should work also with python2, but measuring with `time` it seems that python3 has sightly better performances.
 
 ## Requirements
 
-* running influxDB
+* router AX88u with AsusMerlin
+* server with a running influxDB
+* Python installed on router
+* python dependencies:
+  - opkg install python3-requests
+  - opkg install python3-psutil (for mod_basic)
 
-## Features
+## Notes
 
-* Installer and Update Script
-* Shell "GUI" Database Setup
-* Debug and Test Functions
-* Dependency Test 
+* Only a part of the script have been implemented
+* "helper_dhcpstaticlist" is not necessary in the cron jobs (the parsing is done in the python code only once per run)
+* The Grafana dashboard has been split in sub dashboard, benefits:
+  - smaller dashboard are more manageable (anyway all the information cannnot be show in a single screen, it's too much...)
+  - subdashboard are linked dynamically (if a dashboard is added is also added in the navigator part of the dashboard), this allows the final user to install only the dashboards with data activated in the configuration
+* Most of the measurements have been converted from _point-in-time_ measurements to _counters_, in this way there should be no errors in interpreting the timeframes, as influxdb can manage fields as _non-negative-difference_ and _non-negative-derivative_ (decreased workload in ingesting values + more correct measurements).
+* The code should be cleaned up **a lot**; since the scope of this was to compare the Python approach vs. shell script approach most of the structure are still there from the original scripts (e.g. most of the paramters in calls for modules are not actually used in the Python code)
+* The code to send data to influxDb should be improved with explicit data format casting in order to be able to knowingly send strings or integers and floats with the desired precision...
 
-* **Export these Metrics from AsusWRT-Merlin into InfluxDB**
-* Basis Stats like CPU, Memory, Processes, Network, uptime, Filesystem, Swap
-https://github.com/corgan2222/extstats/wiki/mod_basic
-* Extended WiFi Informations for each Client https://github.com/corgan2222/extstats/wiki/mod_wifi_clients
-* Traffic Analyser per Client https://github.com/corgan2222/extstats/wiki/mod_client_traffic
-* Export the Asus internal Traffic Analyser Data https://github.com/corgan2222/extstats/wiki/mod_trafficAnalyzer
-* VPN Statistics https://github.com/corgan2222/extstats/wiki/mod_vpn_client
-* Support for Conmon Stats (Uptime Monitoring) [connmon | Jack Yaz](https://www.snbforums.com/threads/connmon-internet-connection-monitoring.56163/) https://github.com/corgan2222/extstats/wiki/mod_constats-(Uptime-Monitoring)
-* Support for spdMerlin Stats (Speedtest Data) [spdMerlin | Jack Yaz](https://www.snbforums.com/threads/spdmerlin-automated-speedtests-with-graphs.55904/) https://github.com/corgan2222/extstats/wiki/mod_spdstats-(Speedtest-Monitoring)
+## Modules and Metrics supported
+### mod_basic
+Is the basic module that loads the base router information, including:
+- **cpu** details
+- **memory** info
+- **temperatures**
+- **network traffic**
+- **connections**
+- router's **uptime**
+- router's **firmware version**
+- **filesystem usage**
+- **swap usage**
+
+### mod_vpn_client
+- traffic on each active OpenVPN client the router is using to connect to external OpenVPN servers
+
+### mod_vpn_server
+- data related to each external OpenVPN client connected to each OpenVPN server active on router
+
+### mod_firmware
+- info about the current router's firmware
+**Note:** the firmware version should ba saved to influxdb as string, see below.
+
+### mod_wifi_clients
+- RSSI/noise info about each WiFi client connected to the router
+
+### mod_client_traffic
+**Note:** data from this module is based on the iptables rules set by extstats, however results are not reliable (needs investigation)
+- Traffic generated by each client (no app/protocol details)
+
+### mod_skynet
+- Data about the number of IPs / nets blocked by skynet
+**Note:** not sure about how much this is useful and it is very resource intesive since it parses a long file to get the info. It was implemented to make this proof of concept somewhat comparable to the orginal shell script, but I'd not reccomend to use this, at least not in this form (possibly it should use a better approach to get the info and it should include more interesting information). Also currently this info not included in any Grafana dashboard.
 
 # Known Bugs
-1. if you running aiMesh, the WiFi Clients are not shown
+1. _Traffic by Client_ is not reliable at the moment.
+2. Some Grafana dashboard panels can be improved (a lot)
+3. FW version is sent as a float, it should be a string (this should be fixed managing data types in a more structured way - see notes above)
 
-# ToDos
-1. autostart service
-2. make it compatible with other asusWRT routers
-3. integrate with Conmon and spdStats, that the plugins can share there data easy, without parsing the database
-4. import Diversion Data
-5. make a template for user, to easy integrate there informations
-6. show database infos, like MEASUREMENTS counts
-7. database management, move and delete data from database
-8. show database infos in the asus webui
-9. refactor code, remove redundant code
+# Improvements
 
-# Help needed
-1. if you are an advanced user or developer, please helpt o port this on other asus routers. I only have the RT-AX88U.
-2. how to get the wifi client informations, like rssi and antenna data if using aimesh
-3. how to get cpu temperature
-4. is there any nvram, asusWRT developer documentation that are not public? couldnt found any asuswrt specific docs.
+* Test if it is more efficient to use https client or the proper client Python-library to feed data into influxdb.
 
 # disclamer
-Im not a linux guru and i have done this for my personal use and put a lot of work into this script to make it public availible. For shure are there better, performanter or easyier ways to do some task. So if you have tips how to improve this script, im more than happy if you let me know. stefan [@] knaak.org
+Most of this work is based on [extstats](https://raw.githubusercontent.com/corgan2222/extstats/), so check there for additiona info.
+Not sure if it is clear thus I'll repeat myself: **this is not an installable product (yet) it's a working (with some effort and knowledge) proof of concept of porting _extstats_ in Python**.
+Do not open issues, or feature requests.
+At the moment no specific additional development is planned.
 
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats.jpg)
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats_fs.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats_fs.jpg)
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats_network.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats_network.jpg)
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats_client_traffic.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats_client_traffic.jpg)
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats_trafficbyclient.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats_trafficbyclient.jpg)
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats_speedtest.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats_speedtest.jpg)
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats_asus_ta.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats_asus_ta.jpg)
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats_wifi.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats_wifi.jpg)
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats_wifi2.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats_wifi2.jpg)
-
-[![extstats](https://raw.githubusercontent.com/corgan2222/extstats/master/images_thumbs/extstats_wifi3.jpg)](https://raw.githubusercontent.com/corgan2222/extstats/master/images/extstats_wifi3.jpg)
-
-
-
-## Thanks to Jack Yaz,  thelonelycoder and all the other developers! The install and update functions are based on there work!
-
+This is provided as-is, no responsibility on my side for any direct or indirect damages from this code. Use at your own risk!!!
